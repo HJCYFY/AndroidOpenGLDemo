@@ -8,6 +8,7 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.effect.Effect;
 import android.media.effect.EffectContext;
 import android.media.effect.EffectFactory;
+import android.opengl.GLES10;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
@@ -18,8 +19,15 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import java.nio.ByteBuffer;
+
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
+
+import static android.opengl.GLES10.GL_MAX_TEXTURE_UNITS;
+import static android.opengl.GLES10.GL_TEXTURE_2D;
+import static android.opengl.GLES10.glBindTexture;
+import static android.opengl.GLES10.glEnable;
 
 /**
  * Created by huajun on 18-6-28.
@@ -110,17 +118,37 @@ public class GLView extends GLSurfaceView implements SurfaceHolder.Callback{
         private float mScale = 1.f;
         private int[] mTexName;
 
-        private EffectContext mEffectContext;
-        private Effect mEffect;
         int mWidth,mHeight;
 
+        int mSquareProgram;
+        private int mTexSamplerHandle;
+        private int mTexSamplerHandle2;
 
         public void onSurfaceCreated(GL10 gl, EGLConfig config){
             // 设置背景颜色
             GLES20.glClearColor(255,0,0,1.0f);
 
             mSquare = new Square();
+            mSquareProgram = mSquare.getProgram();
             mTriangle = new Triangle();
+
+            mTexName = new int[2];
+            GLES20.glGenTextures(2,mTexName,0);
+            Log.d("HJ","mTexName "+mTexName[0]+" "+mTexName[1]);
+
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexName[0]);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+
+
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexName[1]);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+
         }
 
         public void onSurfaceChanged(GL10 gl, int width, int height){
@@ -129,11 +157,11 @@ public class GLView extends GLSurfaceView implements SurfaceHolder.Callback{
             mHeight = height;
             float ratio = (float)width/height;
             Matrix.frustumM(mProjectMatrix,0,-ratio,ratio,-1,1,3,7);
+
+            getPicture();
         }
 
         public void onDrawFrame(GL10 gl){
-            getPicture();
-            effect();
             // 画背景颜色
             GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
             // 设置相机位置
@@ -141,7 +169,8 @@ public class GLView extends GLSurfaceView implements SurfaceHolder.Callback{
             // 计算投影及视图变化
             Matrix.multiplyMM(mMVPMatrix,0,mProjectMatrix,0,mViewMatrix,0);
             // 绘制正方形
-            mSquare.draw(mTexName[1]);
+            mSquare.draw(mTexName);
+
         }
 
         public static int loadShader(int type,String shaderCode) {
@@ -177,30 +206,28 @@ public class GLView extends GLSurfaceView implements SurfaceHolder.Callback{
         }
 
         public void getPicture() {
-            mTexName = new int[2];
-            GLES20.glGenTextures(2,mTexName,0);
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexName[0]);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_REPEAT);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_REPEAT);
+
+            mTexSamplerHandle = GLES20.glGetUniformLocation(mSquareProgram,"sTexture");
+            checkGLError("glGetUniformLocation 1");
+            Log.d("HJ","handle1 " +mTexSamplerHandle);
+            mTexSamplerHandle2 = GLES20.glGetUniformLocation(mSquareProgram,"sTexture2");
+            checkGLError("glGetUniformLocation 2");
+            Log.d("HJ","handle2 " +mTexSamplerHandle2);
+            Bitmap photo2;
+            photo2 = BitmapFactory.decodeFile("/storage/emulated/0/DCIM/opengl2.jpg");
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D,mTexName[0]);
+            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, photo2, 0);
+            GLES20.glUniform1i(mTexSamplerHandle,0);
+            photo2.recycle();
 
             Bitmap photo;
             photo = BitmapFactory.decodeFile("/storage/emulated/0/DCIM/opengl.jpg");
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTexName[1]);
             GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, photo, 0);
-        }
-
-        public void effect(){
-            if(mEffectContext == null) {
-                mEffectContext = EffectContext.createWithCurrentGlContext();
-            }
-            if(mEffect != null){
-                mEffect.release();
-            }
-            EffectFactory effectFactory = mEffectContext.getFactory();
-            mEffect = effectFactory.createEffect(EffectFactory.EFFECT_GRAYSCALE);
-            // 这里的宽高 应该设置成 GLView 的大小 以填充整个GLView
-            mEffect.apply(mTexName[0],mWidth,mHeight,mTexName[1]);
+            GLES20.glUniform1i(mTexSamplerHandle2,1);
+            photo.recycle();
         }
     }
 

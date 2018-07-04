@@ -32,16 +32,33 @@ public class Square {
             "precision mediump float;" +
             "varying vec2 vTexCoord;" +
             "uniform sampler2D sTexture;" +
+            "uniform sampler2D sTexture2;" +
             "void main() {" +
-            "   gl_FragColor = texture2D(sTexture,vTexCoord);" +
+            "   const float weight1 = 0.5;" +
+            "   const float weight2 = 0.5;" +
+            "   vec4 textureColor = texture2D(sTexture,vTexCoord);" +
+            "   vec4 textureColor2 = texture2D(sTexture2,vTexCoord);" +
+            "   vec4 outputColor;" +
+            "   outputColor.r = textureColor2.r * weight1 + textureColor.r * weight2;" +
+            "   outputColor.g = textureColor2.g * weight1 + textureColor.g * weight2;" +
+            "   outputColor.b = textureColor2.b * weight1 + textureColor.b * weight2;" +
+            "   outputColor.a = 1.0f;" +
+            "   gl_FragColor = outputColor;" +
             "}";
+
+//    private final String fragmentShaderCode =
+//            "precision mediump float;" +
+//                    "varying vec2 vTexCoord;" +
+//                    "uniform sampler2D sTexture;" +
+//                    "void main() {" +
+//                    "   gl_FragColor = texture2D(sTexture,vTexCoord);" +
+//                    "}";
 
     private FloatBuffer vertexBuffer;
     private FloatBuffer textureBuffer;
     private int mProgram;
     private int mPositionHandle;
     private int mTexCoordHandle;
-    private int mTexSamplerHandle;
 
     // 每个顶点的坐标数量
     static final int COORDS_PER_VERTEX = 3;
@@ -83,13 +100,16 @@ public class Square {
         GLES20.glAttachShader(mProgram, vertexShader);   // add the vertex shader to program
         GLES20.glAttachShader(mProgram, fragmentShader); // add the fragment shader to program
         GLES20.glLinkProgram(mProgram);
-    }
 
-    public void draw(int texture) {
-        // 创建帧缓冲对象 FBO
-        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER,0);
         // Add program to OpenGL environment
         GLES20.glUseProgram(mProgram);
+    }
+
+    public int getProgram(){
+        return mProgram;
+    }
+
+    public void draw(int[] texture) {
         // 渲染过程中禁止颜色混合
 //        GLES20.glDisable(GLES20.GL_BLEND);
 
@@ -104,12 +124,6 @@ public class Square {
         GLES20.glEnableVertexAttribArray(mTexCoordHandle);
         GLES20.glVertexAttribPointer(mTexCoordHandle,2,GLES20.GL_FLOAT,false,8,textureBuffer);
 
-
-        mTexSamplerHandle = GLES20.glGetAttribLocation(mProgram,"sTexture");
-        GLES20.glUniform1i(mTexSamplerHandle,0);
-
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D,texture);
         // Draw the square
         GLES20.glDrawArrays(
                 GLES20.GL_TRIANGLE_STRIP,0,4);
